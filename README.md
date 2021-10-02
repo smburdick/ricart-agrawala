@@ -9,7 +9,7 @@ Interest Formula: `ApplyInterest(P, r) = P(1 + r)`
 
 Should have `P1.port < P2.port < P3.port` (use 6000, 6001, 6002 for example)
 
-Order of events
+## Order of events
 ```py
 ApplyInterest(2, 'B', .10)
 DepositCash(4, 'A', 20)
