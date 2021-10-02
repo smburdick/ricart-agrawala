@@ -1,5 +1,5 @@
 from aiorpc import server, RPCClient
-import asyncio, uvloop, json, sys
+import asyncio, uvloop, json, sys, time
 from datetime import datetime
 
 DB_FILE = "data/bank.db.json"
@@ -9,7 +9,7 @@ class Node:
     async def rpc_requestCSXN(self, requester, timestamp):
         self.log(requester + " is requesting the CSXN")
         if self.requestTimestamp == None or (self.requestTimestamp, self.my_port) > (timestamp, requester):
-            self.log("Grannted request to " + requester)
+            self.log("Granted request to " + requester)
             return True
         else:
             self.log("Deferring requester " + requester)
@@ -25,10 +25,8 @@ class Node:
             ret = await RPCClient('127.0.0.1', int(neighbor)).call('rpc_requestCSXN', self.my_port, self.requestTimestamp)
             if ret: # we haven't been deferred - yay!
                 self.responseSet.add(neighbor)
-        #self.log("Waiting for responses, heard from " + str(self.responseSet))
-        # If we have responses from everyone we can proceed
-        while self.responseSet != self.neighbor_ports: pass
-        # TODO: is this even really supported by the API... can we break out of the infinite loop?
+        while self.responseSet != self.neighbor_ports:
+            await asyncio.sleep(1) # Probably not the right way to do this
         self.log("Acquired CSXN")
 
     async def acquireCSXN(self, timestamp):
@@ -42,10 +40,11 @@ class Node:
             await RPCClient('127.0.0.1', int(neighbor)).call('rpc_csxnIsReleased', self.my_port)
     
     async def releaseCSXN(self):
+        self.log("Releasing CSXN")
         asyncio.get_event_loop().create_task(self.__releaseCSXN())
 
     async def rpc_csxnIsReleased(self, requester):
-        self.log( + " has released the critical section")
+        self.log(requester + " has released the critical section")
         self.responseSet.add(requester)
     
     async def rpc_depositCash(self, timestamp, account, amount):

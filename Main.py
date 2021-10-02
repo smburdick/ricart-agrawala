@@ -29,7 +29,10 @@ async def main():
         apply_interest(p3, 2, 'B', .10)
         , deposit_cash(p1, 4, 'A', 20)
         , withdraw_cash(p2, 4, 'C', 30)
-        , apply_interest(p1, 57, 'C', .10)
+    )
+
+    await asyncio.gather(
+        apply_interest(p1, 57, 'C', .10),
         
     )
 
