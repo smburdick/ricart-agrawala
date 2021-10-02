@@ -2,78 +2,82 @@ from aiorpc import server, RPCClient
 import asyncio, uvloop, json, sys
 from datetime import datetime
 
-DB_FILE = "bank.db.json"
+DB_FILE = "data/bank.db.json"
 
 class Node:
 
-    def log(self, msg):
-        print(("[%s]::[%s] %s") % (datetime.now(), self.my_port, msg))
-
-    def rpc_requestCSXN(self, requester, timestamp):
+    async def rpc_requestCSXN(self, requester, timestamp):
         self.log(requester + " is requesting the CSXN")
-        if self.requestTimestamp == None or (self.my_port, self.requestTimestamp) > (requester, timestamp):
+        if self.requestTimestamp == None or (self.requestTimestamp, self.my_port) > (timestamp, requester):
+            self.log("Grannted request to " + requester)
             return True
         else:
+            self.log("Deferring requester " + requester)
             self.deferrals.add(requester)
             return False
-
-    async def __acquireCSXN(self, neighbor): # Ask neighbor for the critical section
-        ret = await RPCClient('127.0.0.1', int(neighbor)).call('rpc_requestCSXN', self.my_port, self.requestTimestamp)
-        if ret: # we haven't been deferred
-            self.responseSet.add(neighbor)
     
-    def acquireCSXN(self, timestamp):
+    async def __acquireCSXN(self, timestamp):
         self.requestTimestamp = timestamp
         self.responseSet = set({})
+        self.log("Requesting critical section")
         for neighbor in self.neighbor_ports:
             self.log("Requesting CSXN from " + neighbor)
-            asyncio.create_task(self.__acquireCSXN(neighbor))
-        while self.responseSet != self.neighbor_ports:
-            pass
+            ret = await RPCClient('127.0.0.1', int(neighbor)).call('rpc_requestCSXN', self.my_port, self.requestTimestamp)
+            if ret: # we haven't been deferred - yay!
+                self.responseSet.add(neighbor)
+        #self.log("Waiting for responses, heard from " + str(self.responseSet))
+        # If we have responses from everyone we can proceed
+        while self.responseSet != self.neighbor_ports: pass
+        # TODO: is this even really supported by the API... can we break out of the infinite loop?
+        self.log("Acquired CSXN")
 
+    async def acquireCSXN(self, timestamp):
+        await asyncio.Task(self.__acquireCSXN(timestamp))
+        
 
-    async def __releaseCSNXN(self, neighbor):
-        await RPCClient('127.0.0.1', int(neighbor)).call('rpc_csxnIsReleased', self.my_port)
-
-    def releaseCSXN(self):
+    async def __releaseCSXN(self):
         self.requestTimestamp = None
-        #loop = asyncio.get_event_loop()
         for neighbor in self.deferrals:
-            asyncio.create_task(self.__releaseCSNXN(neighbor))
+            self.log("Releasing the CSXN to " + neighbor)
+            await RPCClient('127.0.0.1', int(neighbor)).call('rpc_csxnIsReleased', self.my_port)
+    
+    async def releaseCSXN(self):
+        asyncio.get_event_loop().create_task(self.__releaseCSXN())
 
     async def rpc_csxnIsReleased(self, requester):
+        self.log( + " has released the critical section")
         self.responseSet.add(requester)
     
     async def rpc_depositCash(self, timestamp, account, amount):
-        self.acquireCSXN(timestamp)
+        await self.acquireCSXN(timestamp)
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             data[account] += amount
         with open(DB_FILE, "w") as file:
             json.dump(data, file)
-        self.releaseCSXN()
+        await self.releaseCSXN()
 
     async def rpc_withdrawCash(self, timestamp, account, amount):
-        self.acquireCSXN(timestamp)
+        await self.acquireCSXN(timestamp)
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             data[account] -= amount
         with open(DB_FILE, "w") as file:
             json.dump(data, file)
-        self.releaseCSXN()
+        await self.releaseCSXN()
 
     async def rpc_applyInterest(self, timestamp, account, rate):
-        self.acquireCSXN(timestamp)
+        await self.acquireCSXN(timestamp)
         self.log(("Applying %0.2f%% interest to account %s") % (rate * 100, account))
         with open(DB_FILE, "r") as file:
             data = json.load(file)
-            data[account] *= (1 + rate)
+            data[account] *= (1 + rate) # This is an actual problem in banking and not the way at all to solve it :-)
         with open(DB_FILE, "w") as file:
             json.dump(data, file)
-        self.releaseCSXN()
+        await self.releaseCSXN()
     
     async def rpc_checkBalance(self, timestamp, account):
-        self.acquireCSXN(timestamp)
+        await self.acquireCSXN(timestamp)
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             toReturn = data[account]
@@ -104,6 +108,10 @@ class Node:
         except KeyboardInterrupt:
             s.close()
             loop.run_until_complete(s.wait_closed())
+    
+    def log(self, msg):
+        print(("[%s]::[%s] %s") % (datetime.now(), self.my_port, msg))
+
 
 if __name__ == '__main__':
-    Node(sys.argv[1], sys.argv[2:])
+    asyncio.run(Node(sys.argv[1], sys.argv[2:]))
