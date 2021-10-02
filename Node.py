@@ -80,7 +80,7 @@ class Node:
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             toReturn = data[account]
-        self.releaseCSXN()
+        await self.releaseCSXN()
         return toReturn
 
     def __init__(self, port, neighbor_ports):

@@ -10,7 +10,7 @@ async def withdraw_cash(p, time, acct, amt):
     await p.call('rpc_withdrawCash', time, acct, amt)
 
 async def check_balance(p, time, acct):
-    balance = await p.call('rpc.checkBalance', time, acct)
+    balance = await p.call('rpc_checkBalance', time, acct)
     print(("%s : $%d") % (acct, balance))
 
 async def main():
@@ -33,7 +33,14 @@ async def main():
 
     await asyncio.gather(
         apply_interest(p1, 57, 'C', .10),
-        
+        deposit_cash(p2, 63, 'B', 40),
+        withdraw_cash(p3, 68, 'A', 10)
+    )
+
+    await asyncio.gather(
+        check_balance(p1, 200, 'A'),
+        check_balance(p2, 200, 'B'),
+        check_balance(p3, 200, 'C')
     )
 
     for p in [p1, p2, p3]:
