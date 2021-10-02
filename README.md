@@ -1,4 +1,7 @@
 # ricart-agrawala
+## setup
+* Use Python3.8 (I have only tested this on Python 3.8.12)
+* Make sure `asyncio`, `uvloop`, `aiorpc` are installed
 ## Actions
 ```
 P1: DepositCash(4, 'A', 20), ApplyInterest(57, 'C', .10), CheckBalance(200, 'A')
