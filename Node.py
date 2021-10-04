@@ -1,8 +1,9 @@
 from aiorpc import server, RPCClient
-import asyncio, uvloop, json, sys, time
+import asyncio, uvloop, json, sys
 from datetime import datetime
 
 DB_FILE = "data/bank.db.json"
+SLEEP_TIME = 0.001
 
 class Node:
 
@@ -23,21 +24,21 @@ class Node:
         for neighbor in self.neighbor_ports:
             self.log("Requesting CSXN from " + neighbor)
             ret = await RPCClient('127.0.0.1', int(neighbor)).call('rpc_requestCSXN', self.my_port, self.requestTimestamp)
-            if ret: # we haven't been deferred - yay!
+            if ret: # we haven't been deferred
                 self.responseSet.add(neighbor)
         while self.responseSet != self.neighbor_ports:
-            await asyncio.sleep(1) # Probably not the right way to do this
+            await asyncio.sleep(SLEEP_TIME)
         self.log("Acquired CSXN")
 
     async def acquireCSXN(self, timestamp):
         await asyncio.Task(self.__acquireCSXN(timestamp))
         
-
     async def __releaseCSXN(self):
         self.requestTimestamp = None
         for neighbor in self.deferrals:
             self.log("Releasing the CSXN to " + neighbor)
             await RPCClient('127.0.0.1', int(neighbor)).call('rpc_csxnIsReleased', self.my_port)
+        self.deferrals = set({})
     
     async def releaseCSXN(self):
         self.log("Releasing CSXN")
@@ -49,6 +50,7 @@ class Node:
     
     async def rpc_depositCash(self, timestamp, account, amount):
         await self.acquireCSXN(timestamp)
+        self.log("Depositing $%d to account %s" % (amount, account))
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             data[account] += amount
@@ -58,6 +60,7 @@ class Node:
 
     async def rpc_withdrawCash(self, timestamp, account, amount):
         await self.acquireCSXN(timestamp)
+        self.log("Withdrawing $%d from account %s" % (amount, account))
         with open(DB_FILE, "r") as file:
             data = json.load(file)
             data[account] -= amount
@@ -70,7 +73,7 @@ class Node:
         self.log(("Applying %0.2f%% interest to account %s") % (rate * 100, account))
         with open(DB_FILE, "r") as file:
             data = json.load(file)
-            data[account] *= (1 + rate) # This is an actual problem in banking and not the way at all to solve it :-)
+            data[account] *= (1 + rate)
         with open(DB_FILE, "w") as file:
             json.dump(data, file)
         await self.releaseCSXN()
@@ -87,7 +90,6 @@ class Node:
         self.requestTimestamp = None
         self.neighbor_ports = set(neighbor_ports)
         self.my_port = port
-        #self.vc = {p : 0 for p in neighbor_ports + [port]}
         self.deferrals = set({}) # Processes I have deferred
         self.responseSet = set({}) # Processes I have gotten a response from to access CSXN
         self.requestTimestamp = None
