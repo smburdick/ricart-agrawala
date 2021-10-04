@@ -1,7 +1,19 @@
 # ricart-agrawala
 ## setup
 * Use Python3.8 (I have only tested this on Python 3.8.12)
-* Make sure `asyncio`, `uvloop`, `aiorpc` are installed
+* Run `pip install -r requirements.txt`
+* In separate `tmux` windows (so that all processes may be monitored simultaneously) run
+```
+python Node.py 9000 9001 9002
+python Node.py 9001 9000 9002
+python Node.py 9002 9001 9000
+```
+And in the fourth window, to run the RPCs:
+```
+python Main.py 9000 9001 9002
+```
+You may use other port numbers
+
 ## Actions
 ```
 P1: DepositCash(4, 'A', 20), ApplyInterest(57, 'C', .10), CheckBalance(200, 'A')
