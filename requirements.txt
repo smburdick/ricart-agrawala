@@ -1,0 +1,3 @@
+asyncio>=3.4.3
+aiorpc>=0.1.7
+uvloop>=0.16.0
