@@ -42,3 +42,5 @@ A = 110
 B = 150
 C = 77
 ```
+
+[Sample output](https://imgur.com/a/O85K9sJ)
